@@ -56,13 +56,15 @@ Actions:
 Symptoms:
 
 - no sheet PDF export output.
+- `ocr_results/vision_queue.jsonl` contains `blocked_missing_render_backend`.
 
 Actions:
 
 1. verify `soffice` availability
 2. confirm LibreOffice can open the source file manually if conversion keeps failing
 3. keep embedded-image extraction as fallback where available
-4. log warning and affected workbook
+4. review `workbook_inventory.md` visual preflight counts for shapes/connectors/unsupported media
+5. log warning and affected workbook
 
 ## OCR outputs empty
 
@@ -73,8 +75,9 @@ Symptoms:
 Actions:
 
 1. check OCR backend and language data
-2. increase export resolution before OCR
-3. split large visuals into tiles and rerun
+2. if `pytesseract` is unavailable, verify the `tesseract` executable is installed and visible
+3. increase export resolution before OCR
+4. split large visuals into tiles and rerun
 
 ## Workbook parse failure
 

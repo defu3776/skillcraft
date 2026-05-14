@@ -5,14 +5,18 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import posixpath
 import re
 import shutil
 import subprocess
+import zipfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
+from xml.etree import ElementTree as ET
 
 from openpyxl import load_workbook
 
@@ -21,6 +25,7 @@ from runtime.executables import find_executable
 
 SUBPROCESS_TIMEOUT_SECONDS = 120
 MAX_PDF_OCR_PAGES = 25
+OCR_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp"}
 
 
 @dataclass(slots=True)
@@ -164,6 +169,59 @@ class SheetAnalysis:
 
 
 @dataclass(slots=True)
+class SheetVisualPreflight:
+    sheet_name: str | None
+    sheet_index: int | None
+    drawing_xml_path: str
+    anchor_count: int = 0
+    picture_count: int = 0
+    shape_count: int = 0
+    connector_count: int = 0
+    group_shape_count: int = 0
+    graphic_frame_count: int = 0
+    media_ref_count: int = 0
+    embedded_object_count: int = 0
+    unsupported_media_refs: list[str] = field(default_factory=list)
+    sample_object_names: list[str] = field(default_factory=list)
+    sample_texts: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class WorkbookVisualPreflight:
+    media_count: int = 0
+    media_ext_counts: dict[str, int] = field(default_factory=dict)
+    sniffed_media_ext_counts: dict[str, int] = field(default_factory=dict)
+    drawing_xml_count: int = 0
+    chart_xml_count: int = 0
+    embedded_object_count: int = 0
+    external_link_count: int = 0
+    comment_xml_count: int = 0
+    vba_project: bool = False
+    unsupported_media_count: int = 0
+    unsupported_media_exts: list[str] = field(default_factory=list)
+    anchor_count: int = 0
+    picture_count: int = 0
+    shape_count: int = 0
+    connector_count: int = 0
+    group_shape_count: int = 0
+    graphic_frame_count: int = 0
+    requires_sheet_render: bool = False
+    sheet_visuals: list[SheetVisualPreflight] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class VisionTask:
+    task_id: str
+    source_file: str
+    scope: str
+    asset_path: str | None
+    asset_type: str
+    reason: str
+    prompt: str
+    status: str = "queued"
+
+
+@dataclass(slots=True)
 class WorkbookAnalysis:
     source_file: str
     workbook_name: str
@@ -172,6 +230,7 @@ class WorkbookAnalysis:
     named_ranges: dict[str, str]
     sheet_analyses: list[SheetAnalysis]
     extraction_warnings: list[str] = field(default_factory=list)
+    visual_preflight: WorkbookVisualPreflight | None = None
 
 
 @dataclass(slots=True)
@@ -210,6 +269,7 @@ class PipelineResult:
     workbook_results: list[WorkbookAnalysis] = field(default_factory=list)
     document_results: list[DocumentAnalysis] = field(default_factory=list)
     ocr_results: list[OCRResult] = field(default_factory=list)
+    vision_tasks: list[VisionTask] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     @classmethod
@@ -262,6 +322,260 @@ def _display_output_path(path: Path, output_root: Path) -> str:
     if _is_relative_to(resolved_path, resolved_root):
         return str(resolved_path.relative_to(resolved_root))
     return path.name
+
+
+def _xml_local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _iter_xml_local(root: ET.Element, local_name: str) -> list[ET.Element]:
+    return [item for item in root.iter() if _xml_local_name(item.tag) == local_name]
+
+
+def _read_zip_xml(zf: zipfile.ZipFile, name: str) -> ET.Element | None:
+    try:
+        return ET.fromstring(zf.read(name))
+    except Exception:
+        return None
+
+
+def _zip_target_path(base_file: str, target: str) -> str:
+    if target.startswith("/"):
+        return posixpath.normpath(target.lstrip("/"))
+    return posixpath.normpath(posixpath.join(posixpath.dirname(base_file), target))
+
+
+def _sniff_image_suffix(data: bytes) -> str | None:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+    if data.startswith(b"BM"):
+        return ".bmp"
+    if data.startswith((b"II*\x00", b"MM\x00*")):
+        return ".tif"
+    if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def _rels_path_for(part_path: str) -> str:
+    return posixpath.join(posixpath.dirname(part_path), "_rels", f"{posixpath.basename(part_path)}.rels")
+
+
+def _relationship_map(zf: zipfile.ZipFile, rels_path: str) -> dict[str, dict[str, str]]:
+    root = _read_zip_xml(zf, rels_path)
+    if root is None:
+        return {}
+    rels: dict[str, dict[str, str]] = {}
+    for rel in _iter_xml_local(root, "Relationship"):
+        rel_id = rel.attrib.get("Id")
+        if rel_id:
+            rels[rel_id] = {
+                "target": rel.attrib.get("Target", ""),
+                "type": rel.attrib.get("Type", ""),
+                "mode": rel.attrib.get("TargetMode", ""),
+            }
+    return rels
+
+
+def _workbook_sheet_lookup(zf: zipfile.ZipFile) -> dict[str, dict[str, str | int]]:
+    workbook_root = _read_zip_xml(zf, "xl/workbook.xml")
+    workbook_rels = _relationship_map(zf, "xl/_rels/workbook.xml.rels")
+    if workbook_root is None:
+        return {}
+    lookup: dict[str, dict[str, str | int]] = {}
+    rel_attr = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+    for idx, sheet in enumerate(_iter_xml_local(workbook_root, "sheet"), start=1):
+        rel_id = sheet.attrib.get(rel_attr)
+        rel = workbook_rels.get(rel_id or "")
+        if not rel:
+            continue
+        target = rel.get("target", "")
+        if not target:
+            continue
+        sheet_path = _zip_target_path("xl/workbook.xml", target)
+        lookup[sheet_path] = {"sheet_name": sheet.attrib.get("name", ""), "sheet_index": idx}
+    return lookup
+
+
+def _drawing_sheet_lookup(zf: zipfile.ZipFile) -> dict[str, dict[str, str | int]]:
+    sheet_lookup = _workbook_sheet_lookup(zf)
+    drawing_lookup: dict[str, dict[str, str | int]] = {}
+    for sheet_path, sheet_info in sheet_lookup.items():
+        rels = _relationship_map(zf, _rels_path_for(sheet_path))
+        for rel in rels.values():
+            if rel["type"].endswith("/drawing") and rel["target"]:
+                drawing_lookup[_zip_target_path(sheet_path, rel["target"])] = sheet_info
+    return drawing_lookup
+
+
+def _drawing_media_refs(zf: zipfile.ZipFile, drawing_path: str) -> tuple[list[str], int]:
+    rels = _relationship_map(zf, _rels_path_for(drawing_path))
+    media_refs: list[str] = []
+    embedded_objects = 0
+    for rel in rels.values():
+        target = rel["target"]
+        if not target:
+            continue
+        rel_type = rel["type"]
+        resolved = _zip_target_path(drawing_path, target)
+        if "/image" in rel_type or resolved.startswith("xl/media/"):
+            media_refs.append(resolved)
+        if "oleObject" in rel_type or "package" in rel_type or resolved.startswith("xl/embeddings/"):
+            embedded_objects += 1
+    return media_refs, embedded_objects
+
+
+def _zip_media_ocr_suffix(zf: zipfile.ZipFile, media_path: str) -> str:
+    ext = Path(media_path).suffix.lower() or "(none)"
+    try:
+        return _sniff_image_suffix(zf.read(media_path)[:32]) or ext
+    except Exception:
+        return ext
+
+
+def _sample_object_names(root: ET.Element, limit: int = 20) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in _iter_xml_local(root, "cNvPr"):
+        name = (item.attrib.get("name") or item.attrib.get("descr") or "").strip()
+        if name and name not in seen:
+            names.append(name)
+            seen.add(name)
+            if len(names) >= limit:
+                break
+    return names
+
+
+def _sample_drawing_texts(root: ET.Element, limit: int = 20) -> list[str]:
+    texts: list[str] = []
+    seen: set[str] = set()
+    for item in _iter_xml_local(root, "t"):
+        text = (item.text or "").strip()
+        text = re.sub(r"\s+", " ", text)
+        if text and text not in seen:
+            texts.append(text)
+            seen.add(text)
+            if len(texts) >= limit:
+                break
+    return texts
+
+
+def inspect_xlsx_visuals(path: Path) -> WorkbookVisualPreflight | None:
+    if path.suffix.lower() not in {".xlsx", ".xlsm"}:
+        return None
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = zf.namelist()
+            media_files = [name for name in names if name.startswith("xl/media/") and not name.endswith("/")]
+            media_ext_counts: dict[str, int] = {}
+            sniffed_media_ext_counts: dict[str, int] = {}
+            unsupported_media_exts: set[str] = set()
+            unsupported_media_count = 0
+            for media in media_files:
+                ext = Path(media).suffix.lower() or "(none)"
+                media_ext_counts[ext] = media_ext_counts.get(ext, 0) + 1
+                try:
+                    detected_ext = _sniff_image_suffix(zf.read(media)[:32]) or ext
+                except Exception:
+                    detected_ext = ext
+                sniffed_media_ext_counts[detected_ext] = sniffed_media_ext_counts.get(detected_ext, 0) + 1
+                if detected_ext not in OCR_IMAGE_EXTS:
+                    unsupported_media_count += 1
+                    unsupported_media_exts.add(ext if detected_ext == ext else f"{ext}->{detected_ext}")
+
+            drawing_paths = [
+                name
+                for name in names
+                if name.startswith("xl/drawings/drawing") and name.endswith(".xml")
+            ]
+            drawing_lookup = _drawing_sheet_lookup(zf)
+            sheet_visuals: list[SheetVisualPreflight] = []
+            total_anchor = total_pic = total_shape = total_connector = 0
+            total_group = total_graphic = total_embedded = 0
+            for drawing_path in sorted(drawing_paths):
+                root = _read_zip_xml(zf, drawing_path)
+                if root is None:
+                    continue
+                media_refs, embedded_objects = _drawing_media_refs(zf, drawing_path)
+                unsupported_refs = sorted(
+                    {
+                        ref
+                        for ref in media_refs
+                        if _zip_media_ocr_suffix(zf, ref) not in OCR_IMAGE_EXTS
+                    }
+                )
+                anchor_count = sum(
+                    len(_iter_xml_local(root, anchor_type))
+                    for anchor_type in ("oneCellAnchor", "twoCellAnchor", "absoluteAnchor")
+                )
+                picture_count = len(_iter_xml_local(root, "pic"))
+                shape_count = len(_iter_xml_local(root, "sp"))
+                connector_count = len(_iter_xml_local(root, "cxnSp"))
+                group_shape_count = len(_iter_xml_local(root, "grpSp"))
+                graphic_frame_count = len(_iter_xml_local(root, "graphicFrame"))
+                total_anchor += anchor_count
+                total_pic += picture_count
+                total_shape += shape_count
+                total_connector += connector_count
+                total_group += group_shape_count
+                total_graphic += graphic_frame_count
+                total_embedded += embedded_objects
+                sheet_info = drawing_lookup.get(drawing_path, {})
+                sheet_visuals.append(
+                    SheetVisualPreflight(
+                        sheet_name=sheet_info.get("sheet_name") if sheet_info else None,
+                        sheet_index=sheet_info.get("sheet_index") if sheet_info else None,
+                        drawing_xml_path=drawing_path,
+                        anchor_count=anchor_count,
+                        picture_count=picture_count,
+                        shape_count=shape_count,
+                        connector_count=connector_count,
+                        group_shape_count=group_shape_count,
+                        graphic_frame_count=graphic_frame_count,
+                        media_ref_count=len(media_refs),
+                        embedded_object_count=embedded_objects,
+                        unsupported_media_refs=unsupported_refs[:50],
+                        sample_object_names=_sample_object_names(root),
+                        sample_texts=_sample_drawing_texts(root),
+                    )
+                )
+
+            embedded_file_count = sum(1 for name in names if name.startswith("xl/embeddings/"))
+            preflight = WorkbookVisualPreflight(
+                media_count=len(media_files),
+                media_ext_counts=dict(sorted(media_ext_counts.items())),
+                sniffed_media_ext_counts=dict(sorted(sniffed_media_ext_counts.items())),
+                drawing_xml_count=len(drawing_paths),
+                chart_xml_count=sum(1 for name in names if name.startswith("xl/charts/") and name.endswith(".xml")),
+                embedded_object_count=embedded_file_count + total_embedded,
+                external_link_count=sum(1 for name in names if name.startswith("xl/externalLinks/")),
+                comment_xml_count=sum(1 for name in names if name.startswith("xl/comments")),
+                vba_project=any(name.endswith("vbaProject.bin") for name in names),
+                unsupported_media_count=unsupported_media_count,
+                unsupported_media_exts=sorted(unsupported_media_exts),
+                anchor_count=total_anchor,
+                picture_count=total_pic,
+                shape_count=total_shape,
+                connector_count=total_connector,
+                group_shape_count=total_group,
+                graphic_frame_count=total_graphic,
+                sheet_visuals=sheet_visuals,
+            )
+            preflight.requires_sheet_render = bool(
+                preflight.shape_count
+                or preflight.connector_count
+                or preflight.group_shape_count
+                or preflight.graphic_frame_count
+                or preflight.embedded_object_count
+                or preflight.unsupported_media_count
+            )
+            return preflight
+    except zipfile.BadZipFile:
+        return None
 
 
 def _run_tool(args: list[str], timeout_seconds: int = SUBPROCESS_TIMEOUT_SECONDS) -> tuple[int, str]:
@@ -459,11 +773,21 @@ def parse_csv_as_sheet(csv_path: Path) -> SheetAnalysis:
 
 
 def _analyze_xlsx_like(path: Path, source_label: str) -> WorkbookAnalysis:
+    visual_preflight = inspect_xlsx_visuals(path)
     try:
         wb = load_workbook(filename=path, data_only=False, read_only=False, keep_links=False)
         wb_data = load_workbook(filename=path, data_only=True, read_only=False, keep_links=False)
     except Exception as exc:
-        return WorkbookAnalysis(source_label, Path(source_label).name, [], [], {}, [], [f"workbook load failed: {exc}"])
+        return WorkbookAnalysis(
+            source_label,
+            Path(source_label).name,
+            [],
+            [],
+            {},
+            [],
+            [f"workbook load failed: {exc}"],
+            visual_preflight,
+        )
 
     named_ranges: dict[str, str] = {}
     try:
@@ -473,6 +797,11 @@ def _analyze_xlsx_like(path: Path, source_label: str) -> WorkbookAnalysis:
         pass
 
     sheet_analyses: list[SheetAnalysis] = []
+    visual_by_sheet = {
+        item.sheet_name: item
+        for item in (visual_preflight.sheet_visuals if visual_preflight else [])
+        if item.sheet_name
+    }
     for idx, sheet in enumerate(wb.worksheets):
         data_sheet = wb_data[sheet.title] if sheet.title in wb_data.sheetnames else None
         anchor_map: dict[str, str] = {}
@@ -532,6 +861,7 @@ def _analyze_xlsx_like(path: Path, source_label: str) -> WorkbookAnalysis:
                 )
             )
         refs = [f"{k}: {v}" for k, v in named_ranges.items() if sheet.title in v]
+        sheet_visual = visual_by_sheet.get(sheet.title)
         sheet_analyses.append(
             SheetAnalysis(
                 sheet_name=sheet.title,
@@ -554,14 +884,42 @@ def _analyze_xlsx_like(path: Path, source_label: str) -> WorkbookAnalysis:
                 conditional_format_count=len(sheet.conditional_formatting),
                 chart_count=len(getattr(sheet, "_charts", [])),
                 image_count=len(getattr(sheet, "_images", [])),
-                drawing_count=1 if getattr(sheet, "_drawing", None) else 0,
-                embedded_object_count=0,
+                drawing_count=(
+                    sheet_visual.shape_count
+                    + sheet_visual.connector_count
+                    + sheet_visual.group_shape_count
+                    + sheet_visual.graphic_frame_count
+                    if sheet_visual
+                    else (1 if getattr(sheet, "_drawing", None) else 0)
+                ),
+                embedded_object_count=sheet_visual.embedded_object_count if sheet_visual else 0,
                 cell_records=cell_records,
                 object_records=object_records,
             )
         )
     hidden = [sheet.title for sheet in wb.worksheets if sheet.sheet_state != "visible"]
-    return WorkbookAnalysis(source_label, Path(source_label).name, [s.title for s in wb.worksheets], hidden, named_ranges, sheet_analyses, [])
+    warnings: list[str] = []
+    if visual_preflight:
+        if visual_preflight.requires_sheet_render:
+            warnings.append(
+                "DrawingML shapes, embedded objects, vector media, or non-raster media detected; "
+                "cell extraction alone is insufficient. Use rendered sheet/PDF outputs plus OCR/Vision for layout semantics."
+            )
+        if visual_preflight.unsupported_media_count:
+            warnings.append(
+                "Unsupported or non-raster media detected for local OCR: "
+                + ", ".join(visual_preflight.unsupported_media_exts)
+            )
+    return WorkbookAnalysis(
+        source_label,
+        Path(source_label).name,
+        [s.title for s in wb.worksheets],
+        hidden,
+        named_ranges,
+        sheet_analyses,
+        warnings,
+        visual_preflight,
+    )
 
 
 def analyze_workbook(path: Path, source_label: str | None = None) -> WorkbookAnalysis:
@@ -651,16 +1009,87 @@ def analyze_document(path: Path, source_label: str | None = None) -> DocumentAna
     return analysis
 
 
+def _extract_raw_office_media(source_file: Path, output_dir: Path) -> list[ObjectRecord]:
+    if source_file.suffix.lower() not in {".xlsx", ".xlsm", ".docx", ".pptx"}:
+        return []
+    media_dir = output_dir / "media_raw"
+    exported: list[ObjectRecord] = []
+    try:
+        with zipfile.ZipFile(source_file) as zf:
+            media_files = sorted(
+                name for name in zf.namelist() if name.startswith(("xl/media/", "word/media/", "ppt/media/")) and not name.endswith("/")
+            )
+            if not media_files:
+                return []
+            media_dir.mkdir(parents=True, exist_ok=True)
+            for media in media_files:
+                data = zf.read(media)
+                suffix = _sniff_image_suffix(data[:32]) or Path(media).suffix.lower() or ".bin"
+                target = media_dir / f"{_artifact_stem(media)}{suffix}"
+                target.write_bytes(data)
+                exported.append(
+                    ObjectRecord(
+                        object_type="raw_media_export",
+                        sheet_name="*",
+                        description=f"Raw Office media part: {media}",
+                        export_path=str(target),
+                    )
+                )
+    except zipfile.BadZipFile:
+        return []
+    return exported
+
+
+def _create_contact_sheet(sheet_name: str, images: list[Path], output_dir: Path) -> Path | None:
+    try:
+        from PIL import Image, ImageDraw
+    except Exception:
+        return None
+    opened: list[tuple[str, Any]] = []
+    for idx, image_path in enumerate(images[:80], start=1):
+        try:
+            img = Image.open(image_path).convert("RGB")
+            img.thumbnail((320, 220))
+            opened.append((f"img{idx}", img.copy()))
+        except Exception:
+            continue
+    if not opened:
+        return None
+
+    cols = 3
+    tile_w = 360
+    tile_h = 260
+    rows = (len(opened) + cols - 1) // cols
+    canvas = Image.new("RGB", (cols * tile_w, rows * tile_h), "white")
+    draw = ImageDraw.Draw(canvas)
+    for idx, (label, img) in enumerate(opened):
+        col = idx % cols
+        row = idx // cols
+        x = col * tile_w + 20
+        y = row * tile_h + 28
+        draw.text((x, row * tile_h + 8), label, fill="black")
+        canvas.paste(img, (x, y))
+        draw.rectangle((x, y, x + img.width, y + img.height), outline="#999999", width=1)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    target = output_dir / f"{_artifact_stem(sheet_name)}.png"
+    canvas.save(target)
+    return target
+
+
 def export_visual_assets(source_file: Path, workbook_analysis: WorkbookAnalysis, output_dir: Path) -> list[ObjectRecord]:
     exported: list[ObjectRecord] = []
     output_dir.mkdir(parents=True, exist_ok=True)
     if source_file.suffix.lower() in {".xlsx", ".xlsm"}:
+        exported.extend(_extract_raw_office_media(source_file, output_dir))
         wb = load_workbook(filename=source_file, data_only=False, read_only=False, keep_links=False)
+        sheet_image_exports: dict[str, list[Path]] = {}
         for sheet in wb.worksheets:
             for idx, image in enumerate(getattr(sheet, "_images", []), start=1):
-                image_path = output_dir / f"{_safe_token(source_file.stem)}__{_safe_token(sheet.title)}__img{idx}.png"
+                image_path = output_dir / f"{_artifact_stem(f'{source_file.name}/{sheet.title}/img{idx}')}.png"
                 try:
                     image_path.write_bytes(image._data())
+                    sheet_image_exports.setdefault(sheet.title, []).append(image_path)
                     exported.append(
                         ObjectRecord(
                             object_type="image_export",
@@ -671,6 +1100,17 @@ def export_visual_assets(source_file: Path, workbook_analysis: WorkbookAnalysis,
                     )
                 except Exception as exc:
                     workbook_analysis.extraction_warnings.append(f"image export failed on {sheet.title}#{idx}: {exc}")
+        for sheet_name, images in sheet_image_exports.items():
+            contact = _create_contact_sheet(sheet_name, images, output_dir / "contact_sheets")
+            if contact:
+                exported.append(
+                    ObjectRecord(
+                        object_type="image_contact_sheet",
+                        sheet_name=sheet_name,
+                        description="Contact sheet of embedded images from one worksheet",
+                        export_path=str(contact),
+                    )
+                )
     soffice = find_executable("soffice")
     if soffice:
         returncode, _log = _run_tool(
@@ -704,17 +1144,78 @@ def export_document_visuals(source_file: Path, output_dir: Path) -> list[Path]:
     return exported
 
 
+@lru_cache(maxsize=1)
+def _tesseract_language_args() -> tuple[str, ...]:
+    tesseract = find_executable("tesseract")
+    if not tesseract:
+        return ()
+    try:
+        completed = subprocess.run(
+            [tesseract, "--list-langs"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except Exception:
+        return ()
+    langs = {
+        line.strip()
+        for line in (completed.stdout + "\n" + completed.stderr).splitlines()
+        if line.strip() and not line.lower().startswith("list of")
+    }
+    if "jpn" in langs and "eng" in langs:
+        return ("-l", "jpn+eng")
+    if "jpn" in langs:
+        return ("-l", "jpn")
+    if "eng" in langs:
+        return ("-l", "eng")
+    return ()
+
+
+def _run_tesseract_cli(image_path: Path, prior_note: str = "") -> OCRResult:
+    tesseract = find_executable("tesseract")
+    if not tesseract:
+        note = "tesseract executable not found"
+        if prior_note:
+            note = f"{prior_note}; {note}"
+        return OCRResult(str(image_path), "skipped", "", note)
+    args = [tesseract, str(image_path), "stdout", *_tesseract_language_args()]
+    try:
+        completed = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return OCRResult(str(image_path), "failed", "", f"tesseract-cli timed out after {SUBPROCESS_TIMEOUT_SECONDS}s")
+    stderr = _redact_paths(completed.stderr or "", image_path).strip()
+    if completed.returncode == 0:
+        notes = "tesseract-cli"
+        if prior_note:
+            notes = f"{notes}; fallback after {prior_note}"
+        if stderr:
+            notes = f"{notes}; stderr: {stderr[:300]}"
+        return OCRResult(str(image_path), "success", (completed.stdout or "").strip(), notes)
+    note = stderr or f"tesseract-cli exited {completed.returncode}"
+    if prior_note:
+        note = f"{prior_note}; {note}"
+    return OCRResult(str(image_path), "failed", "", note[:500])
+
+
 def _run_local_tesseract(image_path: Path) -> OCRResult:
     try:
         import pytesseract
         from PIL import Image
     except Exception as exc:
-        return OCRResult(str(image_path), "skipped", "", f"local OCR unavailable: {exc}")
+        return _run_tesseract_cli(image_path, f"pytesseract unavailable: {exc}")
     try:
         text = pytesseract.image_to_string(Image.open(image_path))
         return OCRResult(str(image_path), "success", text.strip(), "tesseract")
     except Exception as exc:
-        return OCRResult(str(image_path), "failed", "", f"OCR failed: {exc}")
+        return _run_tesseract_cli(image_path, f"pytesseract OCR failed: {exc}")
 
 
 def _run_pdf_ocr(pdf_path: Path, backend: str) -> list[OCRResult]:
@@ -802,6 +1303,77 @@ def run_ocr_for_exports(
     return results
 
 
+def _vision_prompt(asset_type: str) -> str:
+    if asset_type == "sheet_pdf_export":
+        return (
+            "Inspect this rendered workbook/sheet visual. Extract visible workflow steps, UI screens, "
+            "fields, buttons, transaction codes, tables, arrows, and layout relationships. Return evidence "
+            "with page/sheet anchors and mark uncertain items."
+        )
+    return (
+        "Inspect this Office visual asset. Extract readable text plus a concise description of screenshots, "
+        "SAP/G1 screens, flowcharts, object diagrams, tables, fields, buttons, messages, and layout relationships. "
+        "Return evidence with the source asset path and mark uncertain items."
+    )
+
+
+def build_vision_tasks(workbooks: list[WorkbookAnalysis]) -> list[VisionTask]:
+    tasks: list[VisionTask] = []
+    seen: set[tuple[str, str]] = set()
+    for book in workbooks:
+        exported_pdf = False
+        for sheet in book.sheet_analyses:
+            for obj in sheet.object_records:
+                if not obj.export_path:
+                    continue
+                asset_path = obj.export_path
+                key = (book.source_file, asset_path)
+                if key in seen:
+                    continue
+                seen.add(key)
+                ext = Path(asset_path).suffix.lower()
+                asset_type = obj.object_type
+                if asset_type == "sheet_pdf_export":
+                    exported_pdf = True
+                status = "queued" if ext in OCR_IMAGE_EXTS or ext == ".pdf" else "blocked_requires_render_or_conversion"
+                reason = "visual asset extracted for OCR/Vision"
+                if status != "queued":
+                    reason = f"asset extension {ext or '(none)'} is not directly OCR-safe; render/convert before Vision"
+                tasks.append(
+                    VisionTask(
+                        task_id=f"vision-{len(tasks) + 1:04d}",
+                        source_file=book.source_file,
+                        scope="workbook" if obj.sheet_name == "*" else obj.sheet_name,
+                        asset_path=asset_path,
+                        asset_type=asset_type,
+                        reason=reason,
+                        prompt=_vision_prompt(asset_type),
+                        status=status,
+                    )
+                )
+        if book.visual_preflight and book.visual_preflight.requires_sheet_render and not exported_pdf:
+            tasks.append(
+                VisionTask(
+                    task_id=f"vision-{len(tasks) + 1:04d}",
+                    source_file=book.source_file,
+                    scope="workbook",
+                    asset_path=None,
+                    asset_type="sheet_render_missing",
+                    reason="workbook contains DrawingML shapes, object diagrams, embedded objects, or non-raster media but no rendered workbook PDF was produced",
+                    prompt=_vision_prompt("sheet_pdf_export"),
+                    status="blocked_missing_render_backend",
+                )
+            )
+    return tasks
+
+
+def write_vision_queue(path: Path, tasks: list[VisionTask]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        for task in tasks:
+            f.write(json.dumps(asdict(task), ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
 def stage_attachment_files(
     attachment_paths: list[Path],
     visual_export_root: Path,
@@ -850,10 +1422,34 @@ def write_workbook_inventory(path: Path, books: list[WorkbookAnalysis]) -> None:
                 f"- sheet_order: {', '.join(book.sheet_order) if book.sheet_order else '(none)'}",
                 f"- hidden_sheets: {', '.join(book.hidden_sheets) if book.hidden_sheets else '(none)'}",
                 f"- named_ranges: {len(book.named_ranges)}",
+                f"- warnings: {len(book.extraction_warnings)}",
                 "",
             ]
         )
+        if book.visual_preflight:
+            visual = book.visual_preflight
+            lines.extend(
+                [
+                    "### visual_preflight",
+                    f"- media_count: {visual.media_count}",
+                    f"- media_ext_counts: {json.dumps(visual.media_ext_counts, ensure_ascii=False)}",
+                    f"- sniffed_media_ext_counts: {json.dumps(visual.sniffed_media_ext_counts, ensure_ascii=False)}",
+                    f"- drawing_xml_count: {visual.drawing_xml_count}",
+                    f"- drawing_objects: anchors={visual.anchor_count}, pictures={visual.picture_count}, shapes={visual.shape_count}, connectors={visual.connector_count}, groups={visual.group_shape_count}, graphic_frames={visual.graphic_frame_count}",
+                    f"- embedded_object_count: {visual.embedded_object_count}",
+                    f"- unsupported_media_count: {visual.unsupported_media_count}",
+                    f"- unsupported_media_exts: {', '.join(visual.unsupported_media_exts) if visual.unsupported_media_exts else '(none)'}",
+                    f"- requires_sheet_render: {visual.requires_sheet_render}",
+                    "",
+                ]
+            )
+        visual_by_sheet = {
+            item.sheet_name: item
+            for item in (book.visual_preflight.sheet_visuals if book.visual_preflight else [])
+            if item.sheet_name
+        }
         for sheet in book.sheet_analyses:
+            sheet_visual = visual_by_sheet.get(sheet.sheet_name)
             lines.extend(
                 [
                     f"### sheet: {sheet.sheet_name}",
@@ -865,10 +1461,24 @@ def write_workbook_inventory(path: Path, books: list[WorkbookAnalysis]) -> None:
                     f"- conditional_format_count: {sheet.conditional_format_count}",
                     f"- chart_count: {sheet.chart_count}",
                     f"- image_count: {sheet.image_count}",
+                    f"- drawing_count: {sheet.drawing_count}",
+                    f"- embedded_object_count: {sheet.embedded_object_count}",
                     f"- hyperlinks/comments/formulas: {_count_attr(sheet, 'hyperlink')}/{_count_attr(sheet, 'comment')}/{_count_attr(sheet, 'formula')}",
                     "",
                 ]
             )
+            if sheet_visual:
+                lines.extend(
+                    [
+                        f"- visual_xml: `{sheet_visual.drawing_xml_path}`",
+                        f"- visual_counts: anchors={sheet_visual.anchor_count}, pictures={sheet_visual.picture_count}, shapes={sheet_visual.shape_count}, connectors={sheet_visual.connector_count}, groups={sheet_visual.group_shape_count}, graphic_frames={sheet_visual.graphic_frame_count}",
+                        f"- media_refs: {sheet_visual.media_ref_count}",
+                        f"- unsupported_media_refs: {len(sheet_visual.unsupported_media_refs)}",
+                        f"- sample_object_names: {', '.join(sheet_visual.sample_object_names[:8]) if sheet_visual.sample_object_names else '(none)'}",
+                        f"- sample_drawing_texts: {', '.join(sheet_visual.sample_texts[:8]) if sheet_visual.sample_texts else '(none)'}",
+                        "",
+                    ]
+                )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -933,6 +1543,12 @@ def write_deep_notes(output_dir: Path, books: list[WorkbookAnalysis], docs: list
             lines.append("- No readable sheet content.")
         for sheet in book.sheet_analyses:
             lines.append(f"- `{sheet.sheet_name}` contains {len(sheet.cell_records)} non-empty/comment/link cells.")
+        if book.visual_preflight:
+            visual = book.visual_preflight
+            lines.append(
+                f"- Visual preflight: media={visual.media_count}, drawing_xml={visual.drawing_xml_count}, "
+                f"shapes={visual.shape_count}, connectors={visual.connector_count}, unsupported_media={visual.unsupported_media_count}."
+            )
         if book.extraction_warnings:
             lines.append("")
             lines.append("## Warnings")
@@ -1079,8 +1695,14 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             for obj in exported:
                 if obj.export_path:
                     obj.export_path = _display_output_path(Path(obj.export_path), config.output_root)
-            for sheet in workbook.sheet_analyses:
-                sheet.object_records.extend([obj for obj in exported if obj.sheet_name in {sheet.sheet_name, "*"}])
+            for sheet_idx, sheet in enumerate(workbook.sheet_analyses):
+                sheet.object_records.extend(
+                    [
+                        obj
+                        for obj in exported
+                        if obj.sheet_name == sheet.sheet_name or (obj.sheet_name == "*" and sheet_idx == 0)
+                    ]
+                )
 
     for row in document_rows:
         source = resolve_source(row)
@@ -1110,6 +1732,8 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             config.ocr_backend,
             display_root=config.output_root,
         )
+    result.vision_tasks = build_vision_tasks(result.workbook_results)
+    write_vision_queue(config.ocr_results_path / "vision_queue.jsonl", result.vision_tasks)
 
     write_workbook_inventory(config.output_root / "workbook_inventory.md", result.workbook_results)
     write_document_inventory(config.output_root / "document_inventory.md", result.document_results)

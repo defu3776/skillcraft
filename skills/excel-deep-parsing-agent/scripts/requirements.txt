@@ -3,6 +3,7 @@ openpyxl>=3.1
 
 # Optional but recommended for visual/OCR and richer Office parsing.
 pillow>=10
+# Optional wrapper; runtime falls back to tesseract CLI when absent.
 pytesseract>=0.3
 pypdfium2>=4
 markitdown>=0.1

@@ -16,9 +16,10 @@ Use this skill when the user wants deep, business-meaningful analysis of Office 
 2. Parse spreadsheet workbook -> sheet -> cell/range with coordinates.
 3. Parse Word/PPT document structure (sections, tables/slide text, notes, image signals).
 4. Capture structural elements (hidden sheets, merged cells, formulas, comments, hyperlinks, named ranges, validations, conditional formats, charts, images, shapes, objects).
-5. For visual-heavy sheets/pages, export to PDF or image and run OCR/Vision.
-6. Merge all evidence into traceable outputs.
-7. Mark uncertainty explicitly (`推定`, `不确定`) instead of guessing.
+5. For Excel visuals, preflight the Office ZIP (`xl/media`, DrawingML, anchors, shape text, object names) before relying on parser output.
+6. For visual-heavy sheets/pages, export raw media/contact sheets/PDF where available, run OCR, and write `ocr_results/vision_queue.jsonl` for Vision/LLM follow-up.
+7. Merge all evidence into traceable outputs.
+8. Mark uncertainty explicitly (`推定`, `不确定`) instead of guessing.
 
 ## Environment Probe and Failure Logging
 
@@ -50,8 +51,8 @@ Input/output safety:
 1. Build `file_inventory` for input scope.
 2. Run markdown extraction (`markitdown`) per Office file where applicable.
 3. Build workbook inventory and document inventory.
-4. Export visual pages/regions for OCR/Vision when layout is important.
-5. Run OCR/Vision and map outputs to workbook/sheet/page/region anchors.
+4. Export visual pages/regions, embedded media, and contact sheets for OCR/Vision when layout is important.
+5. Run OCR and map outputs to workbook/sheet/page/region anchors; queue remaining Vision/LLM tasks explicitly.
 6. Fuse all evidence and produce final human summary + structured JSON.
 
 ## Executable Scripts
@@ -102,6 +103,7 @@ python .cursor/skills/excel-deep-parsing-agent/scripts/ocr_runner.py --visual-ro
 - `extracted_markdown/`
 - `visual_exports/`
 - `ocr_results/`
+- `ocr_results/vision_queue.jsonl`
 - `deep_reading_notes/`
 - `final_summary.md`
 - `structured_data.json`

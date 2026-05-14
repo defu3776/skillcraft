@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 - RPC visual corpus hardening
+
+- Added Excel ZIP/DrawingML visual preflight for media counts, shape/connectors, object names, and shape text samples.
+- Added raw `xl/media` extraction with magic-byte image suffix sniffing, so PNG files with `.tmp` names can still enter OCR.
+- Added per-sheet embedded-image contact sheets and `ocr_results/vision_queue.jsonl` for Vision/LLM follow-up.
+- Added Tesseract CLI fallback when `pytesseract` is not installed.
+- Improved workbook inventory warnings for shape-heavy sheets that require sheet render/PDF for layout semantics.
+
 ## 0.2.1 - Release hardening
 
 - Added fail-fast validation for missing or invalid input paths.

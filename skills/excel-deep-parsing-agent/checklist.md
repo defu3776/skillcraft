@@ -16,6 +16,7 @@ Use this checklist to keep delivery quality consistent across teams.
   - [ ] `extracted_markdown/`
   - [ ] `visual_exports/`
   - [ ] `ocr_results/`
+  - [ ] `ocr_results/vision_queue.jsonl`
   - [ ] `deep_reading_notes/`
   - [ ] `final_summary.md`
   - [ ] `structured_data.json`
@@ -37,12 +38,13 @@ Use this checklist to keep delivery quality consistent across teams.
   - [ ] named ranges
   - [ ] validations/conditional formatting
   - [ ] charts/images/shapes/object signals
+  - [ ] visual preflight counts for media, DrawingML, shapes, connectors, unsupported media
 - [ ] Word/PPT extraction includes:
   - [ ] section/paragraph or slide text
   - [ ] table or note extraction when available
   - [ ] image signals
-- [ ] Visual-heavy sheets are exported to PDF/PNG when layout is needed.
-- [ ] OCR/Vision results are mapped to workbook/sheet/page/region.
+- [ ] Visual-heavy sheets are exported to raw media/contact sheets/PDF/PNG when layout is needed and the backend exists.
+- [ ] OCR/Vision results or queued Vision tasks are mapped to workbook/sheet/page/region.
 - [ ] Any parse/tool failure is logged with affected file scope.
 
 ## After Run

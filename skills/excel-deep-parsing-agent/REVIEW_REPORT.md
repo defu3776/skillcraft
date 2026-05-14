@@ -59,6 +59,13 @@ No Critical findings remained after review.
 - Reproduction: the original zip contained `runtime/__pycache__/pipeline.cpython-312.pyc` and `runtime/__pycache__/__init__.cpython-312.pyc`.
 - Fix applied: the hardened release zip is built with `__pycache__/` and `*.pyc` excluded.
 
+#### M-6 Excel DrawingML/object evidence was underreported
+
+- File path: `runtime/pipeline.py`, `README.md`, `SKILL.md`, `troubleshooting.md`
+- Risk: Excel sheets containing SAP screenshots, grouped objects, connectors, and flow diagrams could look successfully parsed while openpyxl silently dropped shape/layout semantics.
+- Reproduction: RPC workbook `RPA-184-A004-001_RPA少額売上審査.xlsx` contains 53 media parts, 9 drawing XML files, 200 shapes, and 22 connectors; openpyxl warned that DrawingML shapes would be lost.
+- Fix applied: added ZIP/DrawingML preflight, raw media export with magic-byte sniffing, contact sheets, drawing object/text samples, explicit render warnings, and `ocr_results/vision_queue.jsonl`.
+
 ### Low
 
 #### L-1 Markdown table cells were not escaped
@@ -74,18 +81,21 @@ GO for cross-team distribution after applying this hardening patch.
 
 ## Residual Known Limitations
 
-- `markitdown`, `soffice`, `pytesseract`, and `pypdfium2` are optional in the tested environment; missing tools are reported and affected stages degrade instead of failing the whole run.
+- `markitdown`, `soffice`, `pytesseract`, and `pypdfium2` are optional in the tested environment; missing tools are reported and affected stages degrade instead of failing the whole run. Local OCR can use the `tesseract` executable without `pytesseract`.
 - `.xls/.doc/.ppt` deep parsing depends on successful LibreOffice conversion.
+- Full sheet rendering of DrawingML layouts still requires LibreOffice/Excel or another renderer; without it the runtime preserves media/object evidence and queues a blocked render task.
 - Archive expansion remains intentionally out of scope; archives are inventoried as pending confirmation.
 - File type selection is extension-driven first, then parser-validated by the relevant library.
-- The runtime performs local OCR only; it does not call an external Vision LLM by itself.
+- The runtime performs local OCR and writes a Vision queue; it does not call an external Vision LLM by itself.
 
 ## Verification Evidence
 
 - Smoke test command: `<python> scripts/smoke_test.py`
-- Smoke test result: exit `0`; core imports `openpyxl` and `runtime.pipeline` passed; optional `pytesseract`, `pypdfium2`, `markitdown`, and `soffice` were reported missing where applicable.
+- Smoke test result: exit `0`; core imports `openpyxl` and `runtime.pipeline` passed; optional `pytesseract`, `pypdfium2`, `markitdown`, and `soffice` were reported missing where applicable; `tesseract` executable was available.
 - Sample pipeline command: `<python> scripts/run_pipeline.py --input-path <sample_input> --output-root <sample_output>`
-- Sample pipeline result: exit `0`; processed `sample.xlsx`, `sample.docx`, `sample.pptx`, and staged `sample.png` attachment for OCR.
+- Sample pipeline result: exit `0`; processed `sample.xlsx`, `sample.docx`, and `sample.pptx`.
+- RPC sample pipeline command: `<python> scripts/run_pipeline.py --input-path <rpc RPA-184 xlsx> --output-root <output_root> --no-markitdown`
+- RPC sample pipeline result: exit `0`; recorded 53 media parts, 9 drawing XML files, 200 shapes, 22 connectors, 111 OCR successes, and 113 Vision queue tasks.
 - Artifact checklist result:
   - `file_inventory.md`: OK
   - `workbook_inventory.md`: OK
@@ -93,6 +103,7 @@ GO for cross-team distribution after applying this hardening patch.
   - `extracted_markdown/`: OK
   - `visual_exports/`: OK
   - `ocr_results/`: OK
+  - `ocr_results/vision_queue.jsonl`: OK
   - `deep_reading_notes/`: OK
   - `final_summary.md`: OK
   - `structured_data.json`: OK
