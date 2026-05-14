@@ -31,6 +31,8 @@ Rules:
 - `<input_path>` must already exist and must be a file or directory.
 - Prefer an output directory outside the input tree.
 - Shared artifacts use relative source paths, not absolute local machine paths.
+- MarkItDown is enabled by default for first-pass Markdown extraction.
+- Choose the visual recognition mode up front: local OCR for speed/cost, or `--no-ocr` plus `ocr_results/vision_queue.jsonl` for LLM Vision review.
 
 ## 4) Check expected outputs
 
@@ -55,6 +57,7 @@ Start from [`troubleshooting.md`](troubleshooting.md) and keep warnings visible 
 ## 7) Known limitations to share with users
 
 - `markitdown` base package may miss format extras (`xlsx`, `docx`), causing markdown-only failures.
+- MarkItDown is not the source of truth for visual layouts; DrawingML preflight and visual exports still decide whether screenshots/objects need review.
 - LibreOffice missing means no `.doc/.ppt` conversion. For spreadsheets, Windows Microsoft Excel automation can still handle `.xls` conversion and workbook PDF export. The runtime checks common `soffice`, PowerShell, and Tesseract locations.
 - If both Python `pytesseract` and the `tesseract` executable are missing, OCR outputs are skipped or limited.
 

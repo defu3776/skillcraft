@@ -5,6 +5,7 @@ Portable Cursor Skill for deep Office analysis with traceable outputs.
 ## What this skill does
 
 - Deep parse Office files (`.xlsx/.xlsm/.xls/.csv/.docx/.doc/.pptx/.ppt`)
+- Run MarkItDown as a default first-pass Markdown extractor when available
 - Inspect spreadsheet workbook/sheet/cell structures (including hidden sheet/object signals)
 - Preflight Excel `xl/media` and DrawingML so shape/object-heavy sheets are flagged instead of silently flattened
 - Inspect Word/PPT structures (paragraphs/tables/slides/notes/image signals)
@@ -69,9 +70,17 @@ Full run:
 python .cursor/skills/excel-deep-parsing-agent/scripts/run_pipeline.py --input-path "<input_path>" --output-root "<output_root>"
 ```
 
+Operator choices:
+
+- Keep MarkItDown enabled by default for broad first-pass text extraction.
+- Use `--no-markitdown` only for isolated visual/export regression tests or when the dependency is intentionally unavailable.
+- Use local OCR when speed/cost matters and OCR quality is acceptable.
+- Use `--no-ocr` when visuals should be handed to an LLM Vision workflow through `ocr_results/vision_queue.jsonl`.
+
 ## Known limitations
 
 - File type handling is extension-driven first, then parser-validated. Unsupported or corrupt files are reported with warnings instead of treated as success.
+- `markitdown` is a useful first-pass extractor, not the source of truth for screenshots, shapes, connectors, or object-heavy sheets.
 - `markitdown` base install may not include all format extras (`xlsx`, `docx`), so markdown extraction can fail for some files while deep parsing still continues.
 - `.xls` can be converted through LibreOffice or Windows Microsoft Excel automation. `.doc/.ppt` still require LibreOffice conversion before deep parsing.
 - Full workbook/sheet PDF export uses LibreOffice first, then Windows Microsoft Excel automation when available. Without either renderer, embedded-image extraction, DrawingML preflight, shape text sampling, contact sheets, and explicit Vision queue entries still run where possible.

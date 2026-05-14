@@ -8,6 +8,10 @@ Yes. Runtime is bundled under `runtime/`, so scripts do not depend on repository
 
 No. If missing, markdown extraction is logged as skipped, and other stages continue.
 
+## Q2-0. Should I keep MarkItDown enabled?
+
+Yes for normal runs. It gives a broad first-pass Markdown view for arbitrary Office files. Do not use it as the only evidence source for screenshots, DrawingML shapes, connectors, or visual layouts.
+
 ## Q2-1. Why can markitdown fail even when installed?
 
 Some file converters are optional extras in MarkItDown.
@@ -34,6 +38,10 @@ The runtime checks common `soffice` locations on macOS, Windows, and PATH. If Li
 ## Q4. Why are OCR results weak?
 
 Likely image quality, language model data, or OCR backend setup. See `troubleshooting.md`.
+
+## Q4-0. Should visuals always go to an LLM Vision model?
+
+That is an operator decision. Use local OCR when token budget or speed matters. Use `--no-ocr` plus `ocr_results/vision_queue.jsonl` when completeness and visual understanding matter more than cost or latency.
 
 ## Q4-1. Do I need `soffice` and `tesseract`?
 

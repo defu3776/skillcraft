@@ -9,6 +9,8 @@ Use this checklist to keep delivery quality consistent across teams.
 - [ ] Input path exists before execution.
 - [ ] Output root is separate from the input directory, or generated output exclusion is acknowledged.
 - [ ] Python runtime and dependency source are explicit (venv, internal mirror, or wheelhouse).
+- [ ] MarkItDown policy is explicit: default enabled, or intentionally disabled for a scoped test.
+- [ ] Visual recognition policy is explicit: local OCR, LLM Vision via `vision_queue.jsonl`, or both.
 - [ ] Required outputs are confirmed:
   - [ ] `file_inventory.md` or `file_inventory.csv`
   - [ ] `workbook_inventory.md`

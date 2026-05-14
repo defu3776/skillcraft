@@ -13,13 +13,14 @@ Use this skill when the user wants deep, business-meaningful analysis of Office 
 ## Required Behavior
 
 1. Inventory first, then analyze.
-2. Parse spreadsheet workbook -> sheet -> cell/range with coordinates.
-3. Parse Word/PPT document structure (sections, tables/slide text, notes, image signals).
-4. Capture structural elements (hidden sheets, merged cells, formulas, comments, hyperlinks, named ranges, validations, conditional formats, charts, images, shapes, objects).
-5. For Excel visuals, preflight the Office ZIP (`xl/media`, DrawingML, anchors, shape text, object names) before relying on parser output.
-6. For visual-heavy sheets/pages, export raw media/contact sheets/PDF where available, run OCR, and write `ocr_results/vision_queue.jsonl` for Vision/LLM follow-up.
-7. Merge all evidence into traceable outputs.
-8. Mark uncertainty explicitly (`推定`, `不确定`) instead of guessing.
+2. Run MarkItDown as the default first-pass Markdown extraction when available; do not use it as the source of truth for visual coverage.
+3. Parse spreadsheet workbook -> sheet -> cell/range with coordinates.
+4. Parse Word/PPT document structure (sections, tables/slide text, notes, image signals).
+5. Capture structural elements (hidden sheets, merged cells, formulas, comments, hyperlinks, named ranges, validations, conditional formats, charts, images, shapes, objects).
+6. For Excel visuals, preflight the Office ZIP (`xl/media`, DrawingML, anchors, shape text, object names) before relying on parser output.
+7. For visual-heavy sheets/pages, export raw media/contact sheets/PDF where available, optionally run local OCR, and write `ocr_results/vision_queue.jsonl` for user-selected Vision/LLM follow-up.
+8. Merge all evidence into traceable outputs.
+9. Mark uncertainty explicitly (`推定`, `不确定`) instead of guessing.
 
 ## Environment Probe and Failure Logging
 
@@ -52,7 +53,7 @@ Input/output safety:
 2. Run markdown extraction (`markitdown`) per Office file where applicable.
 3. Build workbook inventory and document inventory.
 4. Export visual pages/regions, embedded media, and contact sheets for OCR/Vision when layout is important.
-5. Run OCR and map outputs to workbook/sheet/page/region anchors; queue remaining Vision/LLM tasks explicitly.
+5. Run local OCR only when the operator wants a cheap/fast OCR pass; otherwise use `--no-ocr` and consume `vision_queue.jsonl` with an LLM Vision workflow.
 6. Fuse all evidence and produce final human summary + structured JSON.
 
 ## Executable Scripts
