@@ -20,7 +20,7 @@ No Critical findings remained after review.
 - File path: `runtime/pipeline.py`
 - Risk: Files such as `sample.xlsx`, `sample.docx`, and `sample.pptx` wrote to overlapping names like `deep_reading_notes/sample.md` and shared visual/OCR stems. This caused evidence loss and broke source-to-output traceability.
 - Reproduction: before the fix, the mixed Office sample produced only one `deep_reading_notes/sample.md` for three Office files.
-- Fix applied: artifact names now use the relative source path plus an 8-character SHA-256 prefix fragment, for example `sample.xlsx__c7ad6cd5.md`. Markdown, visual export, attachment staging, OCR, and deep-reading outputs use collision-safe names.
+- Fix applied: artifact names now use the relative source path plus an 8-character SHA-256 prefix fragment, for example `sample.xlsx__c7ad6cd5.md`. Markdown, visual export, attachment staging, OCR, and deep-reading outputs use collision-safe names. OCR JSON filenames also include the relative visual export path hash so same-named exports in different folders do not overwrite each other.
 
 ### Medium
 

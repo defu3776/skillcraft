@@ -4,6 +4,7 @@
 
 - Added fail-fast validation for missing or invalid input paths.
 - Added collision-safe artifact names based on relative source paths plus short hashes.
+- Added collision-safe OCR result names based on relative visual export paths plus short hashes.
 - Removed absolute local paths from shared environment, markdown, OCR, and structured result artifacts.
 - Added subprocess timeouts for `markitdown` and `soffice` calls.
 - Added PDF OCR page cap to avoid unbounded local OCR runs.

@@ -772,6 +772,7 @@ def run_ocr_for_exports(
     display_root: Path | None = None,
 ) -> list[OCRResult]:
     output_root.mkdir(parents=True, exist_ok=True)
+    export_root = export_root.expanduser().resolve()
     image_paths = [
         p
         for p in export_root.rglob("*")
@@ -784,15 +785,17 @@ def run_ocr_for_exports(
         if display_root is not None:
             result.source_visual_path = _display_output_path(Path(result.source_visual_path), display_root)
         results.append(result)
-        (output_root / f"{image.stem}.ocr.json").write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2), encoding="utf-8")
+        ocr_name = f"{_artifact_stem(str(image.relative_to(export_root)))}.ocr.json"
+        (output_root / ocr_name).write_text(json.dumps(asdict(result), ensure_ascii=False, indent=2), encoding="utf-8")
     for pdf_path in pdf_paths:
         pdf_results = _run_pdf_ocr(pdf_path, backend)
         if display_root is not None:
             for item in pdf_results:
                 item.source_visual_path = _display_output_path(Path(item.source_visual_path), display_root)
         results.extend(pdf_results)
+        pdf_stem = _artifact_stem(str(pdf_path.relative_to(export_root)))
         for idx, item in enumerate(pdf_results, start=1):
-            (output_root / f"{pdf_path.stem}.page{idx}.ocr.json").write_text(
+            (output_root / f"{pdf_stem}.page{idx}.ocr.json").write_text(
                 json.dumps(asdict(item), ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )

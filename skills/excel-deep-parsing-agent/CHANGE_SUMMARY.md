@@ -4,6 +4,7 @@
 
 - Added input validation so missing or invalid `--input-path` fails with exit code `2` instead of generating empty success artifacts.
 - Added collision-safe artifact naming for markdown, visual exports, attachment staging, OCR JSON, and deep-reading notes.
+- Added collision-safe OCR result names based on relative visual export paths so same-named PDFs/images in different export folders do not overwrite each other.
 - Changed shared runtime artifacts to use relative source/output paths and removed absolute interpreter paths from environment probes.
 - Added a subprocess wrapper with a 120-second timeout for `markitdown` and `soffice`.
 - Added a 25-page cap for local PDF OCR.
