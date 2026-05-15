@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executable entrypoint for excel-deep-parsing-agent skill."""
+"""Executable entrypoint for office-deep-parsing-agent skill."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 def _skill_root() -> Path:
-    # .../.cursor/skills/excel-deep-parsing-agent
+    # .../.cursor/skills/office-deep-parsing-agent
     return Path(__file__).resolve().parents[1]
 
 

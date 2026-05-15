@@ -5,25 +5,25 @@ This page is for first-time users of this skill.
 ## 1) Install
 
 ```bash
-python -m pip install -r .cursor/skills/excel-deep-parsing-agent/scripts/requirements.txt
+python -m pip install -r .cursor/skills/office-deep-parsing-agent/scripts/requirements.txt
 ```
 
 If direct internet access is blocked, use your approved package mirror or wheelhouse:
 
 ```bash
-python -m pip install --no-index --find-links "<wheelhouse_dir>" -r .cursor/skills/excel-deep-parsing-agent/scripts/requirements.txt
+python -m pip install --no-index --find-links "<wheelhouse_dir>" -r .cursor/skills/office-deep-parsing-agent/scripts/requirements.txt
 ```
 
 ## 2) Verify environment quickly
 
 ```bash
-python .cursor/skills/excel-deep-parsing-agent/scripts/smoke_test.py
+python .cursor/skills/office-deep-parsing-agent/scripts/smoke_test.py
 ```
 
 ## 3) Run the pipeline
 
 ```bash
-python .cursor/skills/excel-deep-parsing-agent/scripts/run_pipeline.py --input-path "<input_path>" --output-root "<output_root>"
+python .cursor/skills/office-deep-parsing-agent/scripts/run_pipeline.py --input-path "<input_path>" --output-root "<output_root>"
 ```
 
 Rules:

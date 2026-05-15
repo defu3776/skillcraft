@@ -16,7 +16,7 @@ skillcraft/
     │   ├── SKILL.md
     │   ├── references/
     │   └── scripts/
-    ├── excel-deep-parsing-agent/
+    ├── office-deep-parsing-agent/
     │   ├── SKILL.md
     │   ├── runtime/
     │   └── scripts/
@@ -30,12 +30,14 @@ skillcraft/
 ## Current Skills
 
 - `skills/agent-continuity`: Externalize long-running agent task state into `handoff.md`, supporting proactive checkpoints and emergency rescue handoffs.
-- `skills/excel-deep-parsing-agent`: Deeply parse mixed Office packages with spreadsheet, document, visual export, OCR, and traceable summary artifacts.
+- `skills/office-deep-parsing-agent`: Deeply parse mixed Office packages with spreadsheet, document, visual export, OCR, and traceable summary artifacts.
 - `skills/video-research-visual-report`: Convert a video into a researched text review plus visual report. It covers transcript extraction, original-source checking, external opinions, adversarial analysis, information images, long images, and PPT-style outputs.
 
-## Featured Release: Excel Deep Parsing Agent
+## Featured Release: Office Deep Parsing Agent
 
-`skills/excel-deep-parsing-agent` is currently hardened for cross-team Office parsing distribution. Current skill version: `0.2.5`.
+`skills/office-deep-parsing-agent` is currently hardened for cross-team Office parsing distribution. Current skill version: `0.3.0`.
+
+Migration note: this skill was formerly named `excel-deep-parsing-agent`. Update local symlinks, install paths, and prompts to `office-deep-parsing-agent`.
 
 Use it when an agent needs to inspect Excel/Office files beyond plain cell extraction, especially workbooks with SAP screenshots, DrawingML shapes, connectors, grouped objects, embedded images, or sheets that need PDF/image rendering before LLM Vision review.
 
@@ -51,8 +53,8 @@ Key behavior:
 Quick validation:
 
 ```bash
-python skills/excel-deep-parsing-agent/scripts/smoke_test.py
-python skills/excel-deep-parsing-agent/scripts/run_pipeline.py --input-path "<office_file_or_folder>" --output-root "<output_folder>" --no-ocr
+python skills/office-deep-parsing-agent/scripts/smoke_test.py
+python skills/office-deep-parsing-agent/scripts/run_pipeline.py --input-path "<office_file_or_folder>" --output-root "<output_folder>" --no-ocr
 ```
 
 Required outputs for a healthy run include `file_inventory.md`, `workbook_inventory.md`, `document_inventory.md`, `extracted_markdown/`, `visual_exports/`, `ocr_results/vision_queue.jsonl`, `deep_reading_notes/`, `final_summary.md`, and `structured_data.json`.
@@ -64,7 +66,7 @@ For Codex-style local skills:
 ```bash
 mkdir -p ~/.codex/skills
 ln -s /Volumes/WDC2T/Project/skillcraft/skills/agent-continuity ~/.codex/skills/agent-continuity
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/excel-deep-parsing-agent ~/.codex/skills/excel-deep-parsing-agent
+ln -s /Volumes/WDC2T/Project/skillcraft/skills/office-deep-parsing-agent ~/.codex/skills/office-deep-parsing-agent
 ln -s /Volumes/WDC2T/Project/skillcraft/skills/video-research-visual-report ~/.codex/skills/video-research-visual-report
 ```
 

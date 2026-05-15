@@ -1,6 +1,8 @@
-# excel-deep-parsing-agent
+# office-deep-parsing-agent
 
 Portable Cursor Skill for deep Office analysis with traceable outputs.
+
+Formerly `excel-deep-parsing-agent`. The rename reflects that the skill now handles Office-wide specification packages, not just Excel workbooks. Update local installs and prompts to use `office-deep-parsing-agent`.
 
 ## What this skill does
 
@@ -18,7 +20,7 @@ Portable Cursor Skill for deep Office analysis with traceable outputs.
 ## Directory
 
 ```text
-excel-deep-parsing-agent/
+office-deep-parsing-agent/
 ├── SKILL.md
 ├── reference.md
 ├── examples.md
@@ -50,25 +52,25 @@ Use a virtual environment or other Python runtime that already has the required 
 Install dependencies:
 
 ```bash
-python -m pip install -r .cursor/skills/excel-deep-parsing-agent/scripts/requirements.txt
+python -m pip install -r .cursor/skills/office-deep-parsing-agent/scripts/requirements.txt
 ```
 
 If the network is restricted, install from an internal mirror or wheelhouse, for example:
 
 ```bash
-python -m pip install --no-index --find-links "<wheelhouse_dir>" -r .cursor/skills/excel-deep-parsing-agent/scripts/requirements.txt
+python -m pip install --no-index --find-links "<wheelhouse_dir>" -r .cursor/skills/office-deep-parsing-agent/scripts/requirements.txt
 ```
 
 Smoke test:
 
 ```bash
-python .cursor/skills/excel-deep-parsing-agent/scripts/smoke_test.py
+python .cursor/skills/office-deep-parsing-agent/scripts/smoke_test.py
 ```
 
 Full run:
 
 ```bash
-python .cursor/skills/excel-deep-parsing-agent/scripts/run_pipeline.py --input-path "<input_path>" --output-root "<output_root>"
+python .cursor/skills/office-deep-parsing-agent/scripts/run_pipeline.py --input-path "<input_path>" --output-root "<output_root>"
 ```
 
 Operator choices:

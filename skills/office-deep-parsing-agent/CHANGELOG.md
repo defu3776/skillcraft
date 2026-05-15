@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - Rename to Office Deep Parsing Agent
+
+- Renamed the skill from `excel-deep-parsing-agent` to `office-deep-parsing-agent` to match the current Office-wide scope.
+- Updated skill metadata, folder path references, README install commands, examples, handoff notes, and runtime comments.
+- Kept Excel-heavy Japanese SI specification handling as a primary strength while making Word/PPT and visual evidence support visible in the name.
+- Treat this as a breaking path/name change for local installs; update symlinks and scripts from `excel-deep-parsing-agent` to `office-deep-parsing-agent`.
+
 ## 0.2.5 - Heavy-validation status semantics
 
 - Added machine-readable workbook extraction status fields: `extraction_status`, `status_code`, `container_status`, and `vision_status`.

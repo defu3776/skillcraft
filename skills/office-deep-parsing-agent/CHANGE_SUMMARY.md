@@ -2,6 +2,7 @@
 
 ## What Changed
 
+- Renamed the skill from `excel-deep-parsing-agent` to `office-deep-parsing-agent` to match the Office-wide parsing scope.
 - Added RPC-style Excel visual corpus handling: ZIP/DrawingML preflight, media extension sniffing, raw media extraction, per-sheet contact sheets, shape/object text sampling, and Vision queue output.
 - Added Windows Microsoft Excel automation fallback for workbook PDF export and `.xls -> .xlsx` conversion when LibreOffice is unavailable.
 - Added Windows heavy-vision follow-up fixes: malformed or mismatched-extension `.xlsx` files now fail soft during visual export, non-OOXML container hints are recorded, and workbook-level visual exports still enter the Vision queue when cell parsing fails.
@@ -18,7 +19,7 @@
 - Added executable discovery across PATH plus common macOS and Windows install locations for LibreOffice, PowerShell, and Tesseract.
 - Escaped Markdown table cells in `file_inventory.md`.
 - Clarified dependencies, optional tool behavior, proxy/offline install options, and legacy `.xls/.doc/.ppt` conversion limits.
-- Updated `VERSION` to `0.2.5` and added `0.2.1` through `0.2.5` changelog entries.
+- Updated `VERSION` to `0.3.0` and added a `0.3.0` rename changelog entry above the `0.2.x` hardening history.
 
 ## Why It Changed
 
@@ -31,6 +32,7 @@
 - Reduce Windows-specific release risk for teams that have Microsoft Excel installed but not LibreOffice.
 - Keep one malformed or mislabeled workbook from invalidating a multi-workbook heavy Vision validation run.
 - Avoid false-positive orchestration results when a workbook is fail-soft rather than truly processed.
+- Avoid underselling the skill as Excel-only now that it covers Office-wide specification packages.
 
 ## Validation Results
 
