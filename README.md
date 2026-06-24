@@ -39,6 +39,7 @@ skillcraft/
 ## Current Skills
 
 - `skills/agent-continuity`: Externalize long-running agent task state into `handoff.md`, supporting proactive checkpoints and emergency rescue handoffs.
+- `skills/asana-mcp-codex`: Configure, validate, and troubleshoot Asana V2 MCP access from Codex-style agents without leaking credentials.
 - `skills/artifact-quality-gate`: Validate non-trivial artifacts for evidence, verification, real-vs-mock clarity, repair path, and human-openable entrypoints.
 - `skills/handoff-evidence-collector`: Collect, classify, and validate local Codex/Cursor/project handoff files without rewriting source projects.
 - `skills/office-deep-parsing-agent`: Deeply parse mixed Office packages with spreadsheet, document, visual export, OCR, and traceable summary artifacts.
@@ -77,6 +78,7 @@ For Codex-style local skills:
 ```bash
 mkdir -p ~/.codex/skills
 ln -s /Volumes/WDC2T/Project/skillcraft/skills/agent-continuity ~/.codex/skills/agent-continuity
+ln -s /Volumes/WDC2T/Project/skillcraft/skills/asana-mcp-codex ~/.codex/skills/asana-mcp-codex
 ln -s /Volumes/WDC2T/Project/skillcraft/skills/artifact-quality-gate ~/.codex/skills/artifact-quality-gate
 ln -s /Volumes/WDC2T/Project/skillcraft/skills/handoff-evidence-collector ~/.codex/skills/handoff-evidence-collector
 ln -s /Volumes/WDC2T/Project/skillcraft/skills/office-deep-parsing-agent ~/.codex/skills/office-deep-parsing-agent
