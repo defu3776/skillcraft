@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - High-fidelity lossless extraction gate
+
+- Added a generic high-fidelity / lossless extraction mode for structurally dense Office files, including procedure sheets, requirement matrices, test matrices, visual annotations, and other documents where summaries can hide important details.
+- Kept the skill domain-neutral: no SAP/RPA-specific classifier or business action interpretation is embedded in the Office parser.
+- Added requirements for content, action-bearing statement, context, and coverage ledgers so downstream agents can perform domain interpretation without losing source evidence.
+- Added quality gates for detected-vs-extracted count mismatches, mojibake or mixed encoding, visual evidence coverage, unreviewed action-bearing statements, and unanchored summary claims.
+- Replaced the summary template with a readable, generic template that separates extraction evidence from interpretation.
+
 ## 0.3.0 - Rename to Office Deep Parsing Agent
 
 - Renamed the skill from `excel-deep-parsing-agent` to `office-deep-parsing-agent` to match the current Office-wide scope.

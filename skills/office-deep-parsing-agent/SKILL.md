@@ -22,6 +22,39 @@ Use this skill when the user wants deep, business-meaningful analysis of Office 
 8. Merge all evidence into traceable outputs.
 9. Mark uncertainty explicitly (`推定`, `不确定`) instead of guessing.
 
+## High-Fidelity / Lossless Extraction Mode
+
+When an Office file shows structural signals that downstream consumers may need to inspect in detail, prioritize complete, anchored extraction over concise interpretation.
+
+This mode is generic. Do not add SAP, RPA, accounting, medical, legal, or any other domain-specific classifier to this skill. Domain interpretation belongs to a separate downstream agent. This skill must preserve evidence and expose candidate semantics without deciding business meaning too early.
+
+Trigger this mode when one or more of these structural signals are present:
+
+- dense instruction tables, procedure sheets, requirement matrices, test matrices, or handoff tables
+- repeated step numbers, row-grouped procedures, sectioned instructions, or branch/error rows
+- embedded screenshots, arrows, callouts, highlighted controls, or visual annotations
+- many non-empty cells/paragraphs/slides where a short summary could hide important details
+
+Required behavior in this mode:
+
+1. Treat `final_summary.md` as a navigational summary, not the source of truth.
+2. Preserve a lossless evidence layer: every non-empty cell, merged range, formula/cached value, comment, hyperlink, validation, shape text, image reference, OCR text, and visual anchor must be recoverable from the outputs.
+3. Produce or clearly identify a downstream-ready content ledger with these generic columns where applicable: source file, sheet/section/page, row/column or page region, step number, visible text, normalized text, object kind, nearby heading, visual anchor, extraction method, uncertainty, and notes.
+4. Produce an action-bearing statement ledger when action signals are detected. The ledger only extracts and anchors candidate action text; it does not interpret business meaning. Candidate action signals include imperative verbs, state-changing language, read/query/search, input/set, select/click/navigation, save/register/update/delete, copy/move/archive, download/export/print/PDF, send/notify, branch/loop/wait, error/exception, and external-system handoff.
+5. Produce a context ledger when rows or pages appear to share a screen, window, form, document, or section context. Use concrete boundaries: same section heading, row group, merged region, repeated screen title, visual region, or table block. Continue the context until an explicit context change, close, reset, return, new heading, or uncertain boundary. If the boundary is unclear, mark it as `不确定`.
+6. Produce a coverage report comparing detected source units against extracted units: non-empty cells/paragraphs/slides, merged ranges, images/shapes/objects, OCR/Vision queue items, skipped objects, unresolved parse failures, and any material count mismatch.
+7. Do not collapse a process to the first obvious action. Continue extracting until the next major heading, context change, or terminal action.
+8. Visual annotations are evidence. Arrows, callouts, highlighted buttons, screenshots, and embedded UI images must be linked back to nearby rows/cells and listed as visual signals, even when OCR is incomplete.
+9. A "read-only", "no update", "no download", or "not in scope" conclusion is forbidden unless the same concrete context was checked for counter-signals such as save, register, update, delete, set, input, confirm, execute, issue, output, download, print, error handling, or visual save/export icons.
+10. Never report high confidence when key sheets have mojibake, mixed/ambiguous encoding, missing visual extraction, skipped OCR/Vision, unresolved parse failures, material extracted-vs-detected count mismatch, unanchored summary claims, or unreviewed action-bearing statements.
+11. If the summary is not human-readable because of encoding damage, the run is not complete. Report encoding damage and repair or regenerate the affected artifact before using it for analysis.
+
+Non-goals:
+
+- Do not classify business meaning.
+- Do not infer domain ownership.
+- Do not replace downstream domain review.
+
 ## Environment Probe and Failure Logging
 
 Before full run, probe required capabilities and record status in logs:
@@ -109,6 +142,15 @@ python .cursor/skills/office-deep-parsing-agent/scripts/ocr_runner.py --visual-r
 - `final_summary.md`
 - `structured_data.json`
 
+For high-fidelity / lossless extraction, also produce or clearly identify equivalent downstream-ready ledgers:
+
+- content ledger: all extracted text/objects with stable source anchors
+- action-bearing statement ledger: candidate actions and possible read/input/save/update/download/error signals without domain interpretation
+- context ledger: inferred screen/window/form/section context spans with uncertainty
+- coverage report: detected-vs-extracted counts and unresolved failures
+
+These ledgers may be composed by the agent from pipeline outputs such as `structured_data.json`, visual exports, OCR/Vision queues, and summary artifacts. They are required deliverables for the skill run, but they are not necessarily emitted as separate files by `scripts/run_pipeline.py` alone.
+
 ## Final Summary Minimum Fields (Per Workbook)
 
 - file name
@@ -134,6 +176,10 @@ python .cursor/skills/office-deep-parsing-agent/scripts/ocr_runner.py --visual-r
 - Do not ignore images/objects.
 - Keep conclusions traceable to workbook/sheet/cell or visual page/region.
 - If parse fails, explain reason and impact.
+- Keep extraction and interpretation separate. Downstream agents may classify business meaning; this skill must first make the source document fully inspectable.
+- Completeness beats elegance for dense or procedural documents. A long but anchored ledger is preferred over a short summary that hides steps.
+- A summary that omits action-bearing statements present in the evidence is a quality failure, even if raw cell extraction exists elsewhere.
+- Do not mark confidence as high if required evidence is garbled, visually unreviewed, truncated, unanchored, or only partially covered.
 
 ## Additional Reference
 

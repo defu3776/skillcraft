@@ -49,6 +49,28 @@ Use this checklist to keep delivery quality consistent across teams.
 - [ ] OCR/Vision results or queued Vision tasks are mapped to workbook/sheet/page/region.
 - [ ] Any parse/tool failure is logged with affected file scope.
 
+## High-Fidelity / Lossless Extraction Gate
+
+Use this gate when the input has dense instruction tables, requirement/test matrices, repeated step rows, visual annotations, or enough structure that a short summary could hide important details.
+
+- [ ] `final_summary.md` is treated only as a summary; detailed source evidence exists elsewhere.
+- [ ] A content ledger exists or is clearly identified in `structured_data.json` or another output.
+- [ ] The content ledger can recover all non-empty cells, merged ranges, formulas/cached values, comments, hyperlinks, validation signals, shape text, image references, OCR text, and visual anchors where available.
+- [ ] A coverage report exists and compares detected source units against extracted source units.
+- [ ] Material detected-vs-extracted count mismatches are explicitly reported.
+- [ ] Encoding/readability is checked, including mojibake, mixed/ambiguous encoding, and CJK text under non-CJK locale assumptions.
+- [ ] An action-bearing statement ledger exists when action signals are detected.
+- [ ] The action-bearing statement ledger extracts and anchors candidate statements only; it does not interpret business meaning or domain ownership.
+- [ ] Candidate statements include read/query/search, input/set, navigation, save/register/update/delete, copy/move/archive, download/export/print/PDF, send/notify, branch/loop/wait, error/exception, and external-system handoff when present.
+- [ ] A context ledger exists when rows/pages appear to share a screen/window/form/document/section context.
+- [ ] Context boundaries are concrete: same section heading, row group, merged region, repeated screen title, visual region, or table block.
+- [ ] Context spans continue until an explicit context change, close, reset, return, new heading, or uncertain boundary.
+- [ ] No process is summarized only up to its first visible action when later rows in the same concrete context contain save/update/download/error handling.
+- [ ] Visual annotations such as arrows, callouts, highlighted buttons, screenshots, and embedded UI images are linked to nearby rows/cells or marked as unresolved.
+- [ ] Any "read-only", "no update", "no download", or "not in scope" statement has been checked against counter-signals in the same concrete context.
+- [ ] Every summary claim resolves to an anchor in the content ledger.
+- [ ] Confidence is not marked high when major sheets, visual objects, source-unit counts, action-bearing statements, or summary anchors remain unreviewed.
+
 ## After Run
 
 - [ ] `final_summary.md` exists and each target Excel includes:
@@ -72,6 +94,7 @@ Use this checklist to keep delivery quality consistent across teams.
 - [ ] Unclear points are marked as `不确定`.
 - [ ] Conflicting evidence is explicitly listed.
 - [ ] No critical conclusion lacks source evidence.
+- [ ] No high-confidence conclusion is based on a mojibake, truncated, unanchored, or visually unreviewed artifact.
 
 ## Release Gate
 
