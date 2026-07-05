@@ -59,8 +59,12 @@ def score_text(text):
         "evidence_missing",
         "references:",
         "evidence",
+        "handoff inventory",
+        "Handoff_Inventory.md",
+        "handoff_inventory.json",
         "验证",
         "证据",
+        "re:[\\w./-]+/[^\\s)`]+",
         "re:/(?:Users|Volumes)/[^\\s)`]+",
         "re:/Volumes/[^\\s)`]+",
         "re:`[^`]+\\.(md|json|py|ts|tsx|txt|html|csv|xlsx|docx|pptx|pdf)`",
@@ -88,14 +92,14 @@ def score_text(text):
         "evidence": contract_e,
     }
 
-    verify_e = hits(text, ["validator", "validate", "test", "smoke", "verify", "verification", "eval", "assertion", "检查", "验证", "测试"])
+    verify_e = hits(text, ["validator", "validate", "validator result", "before/after", "score delta", "before_score", "after_score", "test", "smoke", "verify", "verification", "eval", "assertion", "检查", "验证", "测试"])
     dimensions["verification"] = {
         "points": cap(15, len(verify_e), 3),
         "max_points": 15,
         "evidence": verify_e,
     }
 
-    mode_e = hits(text, ["real execution", "real_execution", "dry-run", "dry_run", "mock", "fixture", "candidate", "candidate_only", "真实", "候选"])
+    mode_e = hits(text, ["real execution", "real_execution", "dry-run", "dry_run", "mock", "fixture", "semi-real", "semi_real", "candidate", "candidate_only", "真实", "候选"])
     dimensions["real_mock_distinction"] = {
         "points": cap(10, len(mode_e), 3),
         "max_points": 10,
@@ -127,6 +131,9 @@ def score_text(text):
         rework.append("Add a smoke test, validator result, or verification section.")
     if dimensions["real_mock_distinction"]["points"] < 6:
         rework.append("Label the execution mode as real_execution, dry_run, mock, fixture, or candidate_only.")
+    if "self-distillation" in text.lower() or "continuity audit" in text.lower() or "cross-agent" in text.lower():
+        if not hits(text, ["Handoff_Inventory.md", "handoff_inventory.json", "handoff inventory", "evidence_missing"]):
+            rework.append("For handoff-first artifacts, cite Handoff_Inventory.md, handoff_inventory.json, or mark handoff evidence as evidence_missing.")
     if dimensions["input_process_output_contract"]["points"] < 9:
         rework.append("Add input, workflow, output, and acceptance/completion conditions.")
     if dimensions["repair_rollback"]["points"] < 6:
