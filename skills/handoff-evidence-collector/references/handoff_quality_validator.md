@@ -4,7 +4,7 @@ Mode: `candidate_only`
 
 ## Purpose
 
-Use `agent-continuity` validation for real continuity handoffs, while avoiding false failures on Cursor handoffs, usage guides, templates, and handoff-like docs.
+Use `agent-continuity` validation for real continuity handoffs, while avoiding false failures on Cursor handoffs, other-agent handoff notes, usage guides, templates, and handoff-like docs.
 
 ## Classification Rules
 
@@ -29,4 +29,4 @@ Use `agent-continuity` validation for real continuity handoffs, while avoiding f
 
 - `<project-root>/source-lingo/handoff.md` failed current validator because its status does not start with the required prefix.
 - `skills/agent-continuity/references/handoff-template.md` matched the structural pattern but is a template/reference and should not be counted as a live project handoff.
-- Cursor handoffs under `<project-root>/source-lingo/docs/agent-workflow/` should be collected as implementation evidence, not validated as agent-continuity handoffs.
+- Cursor or other-tool handoffs under project workflow docs should be collected as implementation evidence, not validated as agent-continuity handoffs unless they are the current continuity entrypoint.

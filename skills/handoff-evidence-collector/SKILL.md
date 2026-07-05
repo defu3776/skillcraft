@@ -1,19 +1,22 @@
 ---
 name: handoff-evidence-collector
-description: Collect, classify, and validate local handoff files across Codex, Cursor, and project directories as evidence for continuation, audits, skill evolution, and project status. Use when the user says handoffs can be collected, mentions agent-continuity handoff, asks to audit project continuity, or wants Codex to learn from Cursor/Codex handoff files under project roots supplied by the user.
+description: Collect, classify, and validate local handoff files across Codex, Cursor, other agents, and project directories as evidence for continuation, audits, skill evolution, self-distillation, and project status. Use this as the first step when the user mentions self-distillation, continuity audits, cross-agent continuation, collected handoffs, agent-continuity handoff, Cursor handoff, or wants an agent to learn from prior handoff files under user-supplied project roots.
 ---
 
 # Handoff Evidence Collector
 
 ## Goal
 
-Turn scattered `handoff.md`, `*handoff*.md`, Cursor handoff docs, and agent-continuity handoffs into a usable evidence index without rewriting project files.
+Turn scattered `handoff.md`, `*handoff*.md`, Cursor handoff docs, other-agent handoff notes, and agent-continuity handoffs into a usable evidence index without rewriting project files.
+
+For self-distillation and continuity audits, run this skill before writing the report. The inventory becomes the evidence base that later artifacts should cite and that `artifact-quality-gate` can validate.
 
 ## Inputs
 
-- Project roots supplied with `--root`; if omitted, the scanner defaults to the current working directory. `HANDOFF_EVIDENCE_ROOTS` may provide an `os.pathsep`-separated root list.
-- Known continuity tooling, especially the sibling `skills/agent-continuity/scripts/validate_handoff.py` validator in this repository.
+- Project roots supplied with repeatable `--root` arguments; if omitted, the scanner defaults to the current working directory. `HANDOFF_EVIDENCE_ROOTS` may provide an `os.pathsep`-separated root list.
+- Known continuity tooling, especially the sibling `skills/agent-continuity/scripts/validate_handoff.py` validator in this repository. Use `--validator-path <path>` when the validator is installed elsewhere.
 - User-provided project priority or time range.
+- Do not hardcode one machine's project paths in reusable prompts, README examples, or smoke tests. Accept roots from the user, the current repo, environment variables, or local project markers.
 
 ## Workflow
 
@@ -44,17 +47,23 @@ Turn scattered `handoff.md`, `*handoff*.md`, Cursor handoff docs, and agent-cont
 Run from the `skillcraft` repository root or another writable workspace:
 
 ```sh
-python3 skills/handoff-evidence-collector/scripts/handoff_inventory.py --output-root /tmp/handoff-evidence-smoke-output --root .
+python3 skills/handoff-evidence-collector/scripts/handoff_inventory.py \
+  --output-root /tmp/handoff-evidence-smoke-output \
+  --root skills/handoff-evidence-collector/examples/smoke-root \
+  --root skills/agent-continuity/references \
+  --validator-path skills/agent-continuity/scripts/validate_handoff.py \
+  --execution-mode fixture
 python3 skills/handoff-evidence-collector/scripts/validate_artifact_quality.py /tmp/handoff-evidence-smoke-output/Handoff_Inventory.md
 ```
 
-Execution mode: `real_execution` for the local scan and validator commands. The scanner is read-only against source project roots and writes only to the requested output root. If a future run uses mock, fixture, dry-run, or candidate-only data, label that explicitly in the inventory.
+Execution mode: `fixture` when using the bundled smoke root, and `real_execution` when scanning real user/project roots. The scanner is read-only against source project roots and writes only to the requested output root. If a future run uses mock, fixture, dry-run, or candidate-only data, label that explicitly in the inventory.
 
 Expected:
 
 - finds handoff-like files under the supplied roots;
 - validates true agent-continuity handoffs only;
 - writes JSON/Markdown inventory to the configured output root;
+- records the configured validator path and whether it exists;
 - does not edit project files.
 
 ## Output Contract

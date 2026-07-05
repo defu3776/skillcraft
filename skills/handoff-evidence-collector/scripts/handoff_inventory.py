@@ -9,7 +9,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROOTS = [Path.cwd()]
-VALIDATOR = REPO_ROOT / "skills" / "agent-continuity" / "scripts" / "validate_handoff.py"
+DEFAULT_VALIDATOR = REPO_ROOT / "skills" / "agent-continuity" / "scripts" / "validate_handoff.py"
 SKIP_DIRS = {
     ".git",
     "node_modules",
@@ -42,6 +42,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-root", default="handoff-evidence-smoke-output")
     parser.add_argument("--root", action="append", default=[])
+    parser.add_argument("--validator-path")
+    parser.add_argument(
+        "--execution-mode",
+        default="real_execution",
+        choices=["real_execution", "fixture", "mock", "dry_run", "semi_real", "candidate_only"],
+        help="Label the inventory evidence mode explicitly.",
+    )
     args = parser.parse_args()
 
     out = Path(args.output_root).resolve()
@@ -49,6 +56,8 @@ def main() -> None:
     env_roots = [p for p in os.environ.get("HANDOFF_EVIDENCE_ROOTS", "").split(os.pathsep) if p]
     roots_arg = args.root or env_roots
     roots = [Path(p).expanduser().resolve() for p in roots_arg] if roots_arg else DEFAULT_ROOTS
+    validator = Path(args.validator_path).expanduser().resolve() if args.validator_path else DEFAULT_VALIDATOR
+    validator_missing = not validator.exists()
 
     paths = []
     for root in roots:
@@ -79,9 +88,15 @@ def main() -> None:
             continue
         kind = classify(path, text)
         validation = {"attempted": False}
-        if kind == "agent_continuity_handoff" and VALIDATOR.exists():
+        if kind == "agent_continuity_handoff" and validator_missing:
+            validation = {
+                "attempted": False,
+                "reason": "validator_missing",
+                "validator": str(validator),
+            }
+        elif kind == "agent_continuity_handoff":
             proc = subprocess.run(
-                ["python3", str(VALIDATOR), str(path)],
+                ["python3", str(validator), str(path)],
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -109,7 +124,9 @@ def main() -> None:
         counts[rec.get("kind", "unreadable")] = counts.get(rec.get("kind", "unreadable"), 0) + 1
     data = {
         "roots": [str(r) for r in roots],
-        "validator": str(VALIDATOR),
+        "validator": str(validator),
+        "validator_exists": not validator_missing,
+        "execution_mode": args.execution_mode,
         "counts": counts,
         "records": records,
     }
@@ -124,11 +141,11 @@ def main() -> None:
         "",
         "Objective: collect handoffs without editing source projects, classify each file, and validate only true agent-continuity handoffs.",
         "",
-        "STATUS: real_execution_smoke",
+        f"STATUS: {args.execution_mode}",
         "",
         "Outcome: generated a Markdown inventory plus JSON evidence index for the requested roots.",
         "",
-        "Execution mode: real_execution. This is not mock and not dry_run. This script only reads project files and writes this inventory to the requested output directory; it does not edit project files.",
+        f"Execution mode: `{args.execution_mode}`. This script only reads source roots and writes this inventory to the requested output directory; it does not edit project files. Use `fixture`, `mock`, `dry_run`, `semi_real`, or `candidate_only` instead of `real_execution` whenever the input roots or evidence are not live project evidence.",
         "",
         "Evidence: each record below includes a concrete file path, mtime, classification, and validator result when applicable. `evidence_missing` is used only when a root is unavailable or a file cannot be read.",
         "",
@@ -178,7 +195,8 @@ def main() -> None:
         lines.append(f"- `{root}`")
     lines += [
         "",
-        f"Validator: `{VALIDATOR}`",
+        f"Validator: `{validator}`",
+        f"Validator status: `{'missing' if validator_missing else 'available'}`",
         "",
         "## Counts",
         "",
@@ -201,6 +219,8 @@ def main() -> None:
         val = rec.get("validation", {})
         if val.get("attempted"):
             validation = f"rc={val.get('returncode')} {val.get('stdout') or val.get('stderr')}"
+        elif val.get("reason") == "validator_missing":
+            validation = "validator_missing"
         else:
             validation = "not_applicable"
         lines.append(f"| `{rec['path']}` | {rec.get('kind')} | {rec.get('mtime','')} | {fields} | {validation} |")

@@ -32,6 +32,8 @@ Record:
 - Keep `Next Minimal Step` to one action.
 - Preserve prior blockers and do-not-retry notes unless they are explicitly resolved.
 - If a claim has no evidence, mark it as `Assumption`.
+- The `## Status` section must start with `READY TO CONTINUE`, `NEEDS REVIEW`, or `BLOCKED ON <specific blocker>` so `scripts/validate_handoff.py` can verify it.
+- For self-distillation or generated artifact packages, put `handoff.md` in the output directory if that is the safest continuation root.
 
 ## Bad Checkpoint
 
@@ -45,4 +47,16 @@ We made progress and should continue fixing things.
 `src/importer.ts` now parses quoted CSV fields; `npm test -- importer` passes.
 Next minimal step: update `docs/import.md` with the new quote-handling behavior.
 Do not retry `npm test` for the full suite until dependency install issue in `packages/ui` is resolved.
+```
+
+## Self-Distillation Checkpoint
+
+Use an output-directory handoff when the task generates reports or skill candidates but does not edit a source project.
+
+```text
+Output root: `outputs/self_distillation_20260705`.
+Confirmed: `Handoff_Inventory.md` and `work/handoff_inventory.json` were generated from two user-supplied roots.
+Confirmed: `artifact-quality-gate` scored `00_receipt.md` as `90 / ready`.
+Next minimal step: review `16_installation_plan_and_rollback.md` before installing any candidate.
+Do not edit source projects until the user explicitly approves the candidate patch.
 ```

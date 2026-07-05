@@ -78,18 +78,33 @@ Required outputs for a healthy run include `file_inventory.md`, `workbook_invent
 For Codex-style local skills:
 
 ```bash
+SKILLCRAFT_ROOT=/path/to/skillcraft
 mkdir -p ~/.codex/skills
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/agent-continuity ~/.codex/skills/agent-continuity
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/asana-mcp-codex ~/.codex/skills/asana-mcp-codex
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/artifact-quality-gate ~/.codex/skills/artifact-quality-gate
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/handoff-evidence-collector ~/.codex/skills/handoff-evidence-collector
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/office-deep-parsing-agent ~/.codex/skills/office-deep-parsing-agent
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/powershell-gh-cli ~/.codex/skills/powershell-gh-cli
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/windows-powershell-safety ~/.codex/skills/windows-powershell-safety
-ln -s /Volumes/WDC2T/Project/skillcraft/skills/video-research-visual-report ~/.codex/skills/video-research-visual-report
+ln -s "$SKILLCRAFT_ROOT/skills/agent-continuity" ~/.codex/skills/agent-continuity
+ln -s "$SKILLCRAFT_ROOT/skills/asana-mcp-codex" ~/.codex/skills/asana-mcp-codex
+ln -s "$SKILLCRAFT_ROOT/skills/artifact-quality-gate" ~/.codex/skills/artifact-quality-gate
+ln -s "$SKILLCRAFT_ROOT/skills/handoff-evidence-collector" ~/.codex/skills/handoff-evidence-collector
+ln -s "$SKILLCRAFT_ROOT/skills/office-deep-parsing-agent" ~/.codex/skills/office-deep-parsing-agent
+ln -s "$SKILLCRAFT_ROOT/skills/powershell-gh-cli" ~/.codex/skills/powershell-gh-cli
+ln -s "$SKILLCRAFT_ROOT/skills/windows-powershell-safety" ~/.codex/skills/windows-powershell-safety
+ln -s "$SKILLCRAFT_ROOT/skills/video-research-visual-report" ~/.codex/skills/video-research-visual-report
 ```
 
 For other tools, copy or reference the relevant skill folder and its `SKILL.md`.
+
+## Handoff Evidence Collector Example
+
+Use user-supplied roots, repeat `--root` as needed, and pass an explicit validator path when the sibling `agent-continuity` skill is not in the default repository layout:
+
+```bash
+python3 skills/handoff-evidence-collector/scripts/handoff_inventory.py \
+  --output-root /tmp/handoff-inventory \
+  --root /path/to/project-a \
+  --root /path/to/project-b \
+  --validator-path skills/agent-continuity/scripts/validate_handoff.py
+```
+
+The collector is read-only against source roots. It writes `Handoff_Inventory.md` and `work/handoff_inventory.json` under the requested output root.
 
 ## Repository Rules
 
