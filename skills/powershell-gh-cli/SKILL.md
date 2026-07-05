@@ -33,6 +33,8 @@ Reason: this keeps `>`, `|`, `$`, quotes, braces, and newlines inside PowerShell
 - Use PowerShell arrays for arguments when the command is complex.
 - Do not build a single command string and run it with `Invoke-Expression`.
 - Use `ConvertFrom-Json` for filtering, joins, grouping, and formatted output.
+- For PR bodies, comments, titles, or other metadata containing Japanese, Chinese, or other non-ASCII text, write the body to an explicit UTF-8 file and pass it with `--body-file`; do not pipe a PowerShell here-string directly to `gh --body-file -`.
+- When inspecting UTF-8 files from Windows PowerShell, use `Get-Content -Encoding UTF8` or `[System.IO.File]::ReadAllText(...)` with an explicit UTF-8 encoding. Default `Get-Content` can misread no-BOM UTF-8 and make a correct file look mojibake.
 - Use `--jq` only for short expressions with no shell-sensitive characters.
 - If `--jq` is necessary, wrap the expression in single quotes and keep output formatting outside jq.
 - Treat errors like `unknown shorthand flag: '>' in ->` as shell quoting/argument splitting symptoms first, not as GitHub CLI semantics.
@@ -62,6 +64,35 @@ $items = gh pr list --state merged --search 'crowdstrike repo:Mitsubishi-Chemica
   --json number,title,headRefName,baseRefName,mergedAt,mergeCommit,url --limit 30 |
   ConvertFrom-Json
 $items | Sort-Object mergedAt | Select-Object number,headRefName,baseRefName,mergedAt,title
+```
+
+Non-ASCII PR body update:
+
+```powershell
+$bodyPath = Join-Path $env:TEMP "pr-body-utf8.md"
+$body = @'
+## 対応内容
+
+日本語や中文を含むPR本文。
+'@
+$encoding = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($bodyPath, $body, $encoding)
+
+$args = @(
+  'pr', 'edit', '1710',
+  '--repo', 'owner/repo',
+  '--title', '日本語タイトル',
+  '--body-file', $bodyPath
+)
+& gh @args
+```
+
+Verify remote text after creating or editing non-ASCII PR metadata:
+
+```powershell
+$pr = gh pr view 1710 --repo owner/repo --json title,body,url,isDraft | ConvertFrom-Json
+$pr.body.Contains('## 対応内容')
+$pr.body.Contains('繧') -or $pr.body.Contains('縺') -or $pr.body.Contains('�')
 ```
 
 ## When Inline `--jq` Is Acceptable
